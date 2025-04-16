@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toaster Launch!</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            background: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+            overflow: hidden;
+        }
+        
+        .game-title {
+            margin-top: 10px;
+            font-size: 32px;
+            color: #FF6347;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 500px;
+            background-color: #5BA8D7;
+            border: 4px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+        
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        .controls {
+            display: flex;
+            width: 800px;
+            padding: 15px;
+            justify-content: space-between;
+            background-color: #FAF0E6;
+            border: 4px solid #333;
+            border-radius: 10px;
+            margin-top: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            font-size: 18px;
+            background-color: #FF6347;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #B22222;
+            transition: all 0.1s;
+        }
+        
+        button:hover {
+            background-color: #FF8C69;
+        }
+        
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #B22222;
+        }
+        
+        .scoreboard {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        
+        .level-indicator, .target-indicator, .score-indicator, .wind-indicator {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            display: none;
+        }
+        
+        .game-over h2 {
+            color: white;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .game-over p {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="game-title">🍞 Toaster Launch! 🍞</h1>
+    <div class="subtitle">Kitchen Space Agency - Toast Division</div>
+    
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div class="game-over" id="gameOver">
+            <h2>Mission Accomplished!</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button id="restartButton">Launch New Mission</button>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="angleSlider">Launch Angle: <span id="angleValue">45</span>°</label>
+            <input type="range" id="angleSlider" min="0" max="90" value="45">
+        </div>
+        
+        <div class="control-group">
+            <label for="powerSlider">Toaster Power: <span id="powerValue">50</span>%</label>
+            <input type="range" id="powerSlider" min="10" max="100" value="50">
+        </div>
+        
+        <button id="launchButton">LAUNCH!</button>
+    </div>
+    
+    <div class="scoreboard">
+        <div class="level-indicator">Level: <span id="levelValue">1</span></div>
+        <div class="target-indicator">Targets Hit: <span id="targetsValue">0</span>/<span id="totalTargets">3</span></div>
+        <div class="wind-indicator">Wind: <span id="windValue">0</span> mph</div>
+        <div class="score-indicator">Score: <span id="scoreValue">0</span></div>
+    </div>
+    
+    <script>
+        // Game canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // Game elements
+        const toaster = {
+            x: 100,
+            y: height - 80,
+            width: 80,
+            height: 60,
+            color: '#C0C0C0'
+        };
+        
+        let toast = {
+            x: toaster.x + toaster.width / 2,
+            y: toaster.y,
+            radius: 15,
+            color: '#F5DEB3',
+            isLaunched: false,
+            velocityX: 0,
+            velocityY: 0,
+            gravity: 0.2,
+            windFactor: 0
+        };
+        
+        let targets = [];
+        let obstacles = [];
+        let clouds = [];
+        let stars = [];
+        
+        // Game variables
+        let angle = 45;
+        let power = 50;
+        let level = 1;
+        let score = 0;
+        let targetsHit = 0;
+        let windSpeed = 0;
+        let isGameActive = true;
+        let animationId;
+        
+        // DOM elements
+        const angleSlider = document.getElementById('angleSlider');
+        const angleValue = document.getElementById('angleValue');
+        const powerSlider = document.getElementById('powerSlider');
+        const powerValue = document.getElementById('powerValue');
+        const launchButton = document.getElementById('launchButton');
+        const levelValue = document.getElementById('levelValue');
+        const targetsValue = document.getElementById('targetsValue');
+        const totalTargets = document.getElementById('totalTargets');
+        const windValue = document.getElementById('windValue');
+        const scoreValue = document.getElementById('scoreValue');
+        const gameOver = document.getElementById('gameOver');
+        const finalScore = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+        
+        // Event listeners
+        angleSlider.addEventListener('input', () => {
+            angle = parseInt(angleSlider.value);
+            angleValue.textContent = angle;
+        });
+        
+        powerSlider.addEventListener('input', () => {
+            power = parseInt(powerSlider.value);
+            powerValue.textContent = power;
+        });
+        
+        launchButton.addEventListener('click', launchToast);
+        restartButton.addEventListener('click', restartGame);
+        
+        // Game initialization
+        initializeGame();
+        
+        function initializeGame() {
+            // Reset game state
+            isGameActive = true;
+            toast.isLaunched = false;
+            toast.x = toaster.x + toaster.width / 2;
+            toast.y = toaster.y;
+            targetsHit = 0;
+            
+            // Generate wind for the level
+            windSpeed = Math.floor(Math.random() * 21) - 10; // -10 to 10
+            windValue.textContent = windSpeed;
+            
+            // Generate targets based on level
+            targets = [];
+            const numTargets = Math.min(3 + level - 1, 8);
+            totalTargets.textContent = numTargets;
+            
+            for (let i = 0; i < numTargets; i++) {
+                const targetType = Math.random() < 0.7 ? 'butter' : 'jam';
+                targets.push({
+                    x: 300 + Math.random() * 450,
+                    y: height - 40 - Math.random() * 80,
+                    width: targetType === 'butter' ? 30 : 40,
+                    height: targetType === 'butter' ? 20 : 50,
+                    type: targetType,
+                    hit: false
+                });
+            }
+            
+            // Generate obstacles based on level
+            obstacles = [];
+            if (level > 1) {
+                const numObstacles = Math.min(level - 1, 5);
+                for (let i = 0; i < numObstacles; i++) {
+                    obstacles.push({
+                        x: 200 + Math.random() * 400,
+                        y: 100 + Math.random() * 200,
+                        width: 30 + Math.random() * 50,
+                        height: 30 + Math.random() * 50
+                    });
+                }
+            }
+            
+            // Generate clouds for background
+            clouds = [];
+            for (let i = 0; i < 5; i++) {
+                clouds.push({
+                    x: Math.random() * width,
+                    y: 50 + Math.random() * 100,
+                    radius: 30 + Math.random() * 20,
+                    speed: 0.2 + Math.random() * 0.5
+                });
+            }
+            
+            // Generate stars (if we're in higher levels)
+            stars = [];
+            if (level > 3) {
+                for (let i = 0; i < 20; i++) {
+                    stars.push({
+                        x: Math.random() * width,
+                        y: Math.random() * 150,
+                        radius: 1 + Math.random() * 2
+                    });
+                }
+            }
+            
+            // Update displays
+            levelValue.textContent = level;
+            targetsValue.textContent = targetsHit;
+            
+            // Start game loop
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            gameLoop();
+        }
+        
+        function launchToast() {
+            if (!toast.isLaunched && isGameActive) {
+                const radians = angle * Math.PI / 180;
+                const velocity = power / 5;
+                
+                toast.velocityX = Math.cos(radians) * velocity;
+                toast.velocityY = -Math.sin(radians) * velocity;
+                toast.windFactor = windSpeed / 100;
+                toast.isLaunched = true;
+                launchButton.disabled = true;
+            }
+        }
+        
+        function updateToast() {
+            if (toast.isLaunched) {
+                // Apply physics
+                toast.velocityY += toast.gravity;
+                toast.velocityX += toast.windFactor;
+                
+                toast.x += toast.velocityX;
+                toast.y += toast.velocityY;
+                
+                // Check for collisions with targets
+                targets.forEach(target => {
+                    if (!target.hit && 
+                        toast.x + toast.radius > target.x && 
+                        toast.x - toast.radius < target.x + target.width && 
+                        toast.y + toast.radius > target.y && 
+                        toast.y - toast.radius < target.y + target.height) {
+                        target.hit = true;
+                        targetsHit++;
+                        targetsValue.textContent = targetsHit;
+                        
+                        // Award points based on target type
+                        if (target.type === 'butter') {
+                            score += 100 * level;
+                        } else { // jam
+                            score += 200 * level;
+                        }
+                        scoreValue.textContent = score;
+                    }
+                });
+                
+                // Check for collisions with obstacles
+                for (const obstacle of obstacles) {
+                    if (toast.x + toast.radius > obstacle.x && 
+                        toast.x - toast.radius < obstacle.x + obstacle.width && 
+                        toast.y + toast.radius > obstacle.y && 
+                        toast.y - toast.radius < obstacle.y + obstacle.height) {
+                        
+                        // Toast bounces off obstacles
+                        if (toast.x < obstacle.x || toast.x > obstacle.x + obstacle.width) {
+                            toast.velocityX *= -0.7;
+                        }
+                        if (toast.y < obstacle.y || toast.y > obstacle.y + obstacle.height) {
+                            toast.velocityY *= -0.7;
+                        }
+                    }
+                }
+                
+                // Check if toast is out of bounds
+                if (toast.x < 0 || toast.x > width || toast.y > height) {
+                    resetToast();
+                }
+                
+                // Check if level is complete
+                if (targetsHit >= targets.length) {
+                    completeLevel();
+                }
+            }
+        }
+        
+        function resetToast() {
+            toast.isLaunched = false;
+            toast.x = toaster.x + toaster.width / 2;
+            toast.y = toaster.y;
+            launchButton.disabled = false;
+        }
+        
+        function completeLevel() {
+            level++;
+            levelValue.textContent = level;
+            
+            if (level > 5) {
+                endGame();
+            } else {
+                initializeGame();
+            }
+        }
+        
+        function endGame() {
+            isGameActive = false;
+            finalScore.textContent = score;
+            gameOver.style.display = 'flex';
+        }
+        
+        function restartGame() {
+            level = 1;
+            score = 0;
+            scoreValue.textContent = score;
+            gameOver.style.display = 'none';
+            initializeGame();
+        }
+        
+        function updateClouds() {
+            clouds.forEach(cloud => {
+                cloud.x += cloud.speed;
+                if (cloud.x > width + 50) {
+                    cloud.x = -50;
+                }
+            });
+        }
+        
+        function drawBackground() {
+            // Sky gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            
+            if (level <= 2) {
+                // Blue sky for lower levels
+                gradient.addColorStop(0, '#87CEEB');
+                gradient.addColorStop(1, '#B0E0E6');
+            } else if (level <= 4) {
+                // Sunset for middle levels
+                gradient.addColorStop(0, '#FF7F50');
+                gradient.addColorStop(0.5, '#FFD700');
+                gradient.addColorStop(1, '#87CEEB');
+            } else {
+                // Space for highest levels
+                gradient.addColorStop(0, '#000033');
+                gradient.addColorStop(1, '#191970');
+            }
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw stars if in space levels
+            if (level > 3) {
+                ctx.fillStyle = '#FFFFFF';
+                stars.forEach(star => {
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+            
+            // Draw clouds
+            ctx.fillStyle = '#FFFFFF';
+            clouds.forEach(cloud => {
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.radius, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 20, cloud.y - 10, cloud.radius * 0.7, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 40, cloud.y, cloud.radius * 0.9, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 20, cloud.y + 10, cloud.radius * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Ground
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, height - 40, width, 40);
+            
+            // Kitchen counter
+            ctx.fillStyle = '#F5F5DC';
+            ctx.fillRect(0, height - 60, width, 20);
+        }
+        
+        function drawToaster() {
+            // Toaster body
+            ctx.fillStyle = toaster.color;
+            ctx.fillRect(toaster.x, toaster.y, toaster.width, toaster.height);
+            
+            // Toaster details
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(toaster.x + 10, toaster.y + 10, toaster.width - 20, 20);
+            
+            // Toaster lever
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(toaster.x + toaster.width - 15, toaster.y + 40, 10, 15);
+        }
+        
+        function drawToast() {
+            ctx.fillStyle = toast.color;
+            ctx.beginPath();
+            ctx.arc(toast.x, toast.y, toast.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Toast details (little brown spots)
+            ctx.fillStyle = '#CD853F';
+            ctx.beginPath();
+            ctx.arc(toast.x - 5, toast.y - 3, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(toast.x + 6, toast.y + 2, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(toast.x - 2, toast.y + 5, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        function drawTargets() {
+            targets.forEach(target => {
+                if (!target.hit) {
+                    if (target.type === 'butter') {
+                        // Draw butter
+                        ctx.fillStyle = '#F0E68C';
+                        ctx.fillRect(target.x, target.y, target.width, target.height);
+                    } else {
+                        // Draw jam jar
+                        ctx.fillStyle = '#8B0000';
+                        ctx.fillRect(target.x, target.y, target.width, target.height);
+                        
+                        // Jar lid
+                        ctx.fillStyle = '#FFD700';
+                        ctx.fillRect(target.x, target.y, target.width, 10);
+                        
+                        // Jar face (angry)
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.beginPath();
+                        ctx.arc(target.x + 10, target.y + 25, 5, 0, Math.PI * 2);
+                        ctx.arc(target.x + target.width - 10, target.y + 25, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        ctx.fillStyle = '#000000';
+                        ctx.beginPath();
+                        ctx.arc(target.x + 10, target.y + 25, 2, 0, Math.PI * 2);
+                        ctx.arc(target.x + target.width - 10, target.y + 25, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Angry eyebrows
+                        ctx.strokeStyle = '#000000';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(target.x + 5, target.y + 20);
+                        ctx.lineTo(target.x + 15, target.y + 18);
+                        ctx.stroke();
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(target.x + target.width - 5, target.y + 20);
+                        ctx.lineTo(target.x + target.width - 15, target.y + 18);
+                        ctx.stroke();
+                        
+                        // Angry mouth
+                        ctx.beginPath();
+                        ctx.moveTo(target.x + 15, target.y + 40);
+                        ctx.lineTo(target.x + target.width - 15, target.y + 40);
+                        ctx.stroke();
+                    }
+                }
+            });
+        }
+        
+        function drawObstacles() {
+            ctx.fillStyle = '#A0522D';
+            obstacles.forEach(obstacle => {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                
+                // Wood grain
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(obstacle.x, obstacle.y + i * (obstacle.height / 3));
+                    ctx.lineTo(obstacle.x + obstacle.width, obstacle.y + i * (obstacle.height / 3));
+                    ctx.stroke();
+                }
+            });
+        }
+        
+        function drawTrajectoryGuide() {
+            if (!toast.isLaunched) {
+                const radians = angle * Math.PI / 180;
+                const guideLength = power * 1.5;
+                
+                const endX = toast.x + Math.cos(radians) * guideLength;
+                const endY = toast.y - Math.sin(radians) * guideLength;
+                
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(toast.x, toast.y);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        
+        function drawWindIndicator() {
+            // Wind arrow
+            const arrowLength = Math.abs(windSpeed) * 2;
+            const arrowX = width - 100;
+            const arrowY = 50;
+            
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            if (windSpeed > 0) {
+                // Wind blowing right
+                ctx.moveTo(arrowX - arrowLength, arrowY);
+                ctx.lineTo(arrowX, arrowY);
+                ctx.lineTo(arrowX - 10, arrowY - 5);
+                ctx.moveTo(arrowX, arrowY);
+                ctx.lineTo(arrowX - 10, arrowY + 5);
+            } else {
+                // Wind blowing left
+                ctx.moveTo(arrowX, arrowY);
+                ctx.lineTo(arrowX - arrowLength, arrowY);
+                ctx.lineTo(arrowX - arrowLength + 10, arrowY - 5);
+                ctx.moveTo(arrowX - arrowLength, arrowY);
+                ctx.lineTo(arrowX - arrowLength + 10, arrowY + 5);
+            }
+            
+            ctx.stroke();
+            
+            // Wind text
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '16px Comic Sans MS';
+            ctx.fillText('Wind', arrowX - 30, arrowY - 15);
+        }
+        
+        function render() {
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            // Draw game elements
+            drawBackground();
+            drawToaster();
+            drawTargets();
+            drawObstacles();
+            drawToast();
+            drawTrajectoryGuide();
+            drawWindIndicator();
+        }
+        
+        function gameLoop() {
+            updateToast();
+            updateClouds();
+            render();
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
